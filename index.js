@@ -138,7 +138,8 @@ app.get('/api/users/:_id/logs', async (req, res) => {
       if (to) {
         const toDate = new Date(to);
         if (!isNaN(toDate.getTime())) {
-          filter.date.$lte = toDate;
+          toDate.setDate(toDate.getDate() + 1)
+          filter.date.$lt = toDate;
         }
       }
     }
