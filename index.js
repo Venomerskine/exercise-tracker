@@ -98,80 +98,45 @@ app.post('/api/users/:_id/exercises', (req, res) => {
 
 
 //Get users
-app.get('/api/users', async (req, res) => {
-  try {
-    const users = await User.find({});
-    res.json(users.map(user => ({
-      username: user.username,
-      _id: user._id
-    })));
-  } catch (err) {
-    res.status(500).json({ error: 'Error fetching users' });
-  }
-});
-
-//Get users
-
-
-//Get user logs
 app.get('/api/users/:_id/logs', async (req, res) => {
-  const userId = req.params._id;
   const { from, to, limit } = req.query;
+  const userId = req.params._id;
 
   try {
     const user = await User.findById(userId);
-    if (!user) {
-      return res.status(400).json({ error: "unknown userId" });
-    }
+    if (!user) return res.status(404).send('User not found');
 
-    let filter = { userId: userId };
-
+    // Build filter object
+    const filter = { userId };
     if (from || to) {
       filter.date = {};
-      if (from) {
-        const fromDate = new Date(from);
-        if (!isNaN(fromDate.getTime())) {
-          filter.date.$gte = fromDate;
-        }
-      }
-      if (to) {
-        const toDate = new Date(to);
-        if (!isNaN(toDate.getTime())) {
-      
-          toDate.setDate(toDate.getDate() + 1); 
-          filter.date.$lt = toDate;            
-        }
-      }
+      if (from) filter.date.$gte = new Date(from);
+      if (to) filter.date.$lte = new Date(to);
     }
-
-    const totalCount = await Exercise.countDocuments(filter);
 
     let query = Exercise.find(filter).select('description duration date');
-    if (limit) {
-      const parsedLimit = parseInt(limit);
-      if (!isNaN(parsedLimit) && parsedLimit > 0) {
-        query = query.limit(parsedLimit);
-      }
-    }
+    if (limit) query = query.limit(parseInt(limit));
 
-    const exercises = await query;
+    const exercises = await query.exec();
+
+    const log = exercises.map(e => ({
+      description: e.description,
+      duration: e.duration,
+      date: e.date.toDateString()
+    }));
 
     res.json({
-      _id: user._id,
       username: user.username,
-      count: totalCount,
-      log: exercises.map(e => ({
-        description: e.description,
-        duration: e.duration,
-        date: e.date.toDateString()
-      }))
+      count: log.length,
+      _id: user._id,
+      log
     });
-
   } catch (err) {
-    console.error("Error in /api/users/:_id/logs:", err);
-    res.status(500).json({ error: err.message || "Error fetching logs" });
+    console.error(err);
+    res.status(500).send('Server error');
   }
 });
+
 //Get user logs
 
 
