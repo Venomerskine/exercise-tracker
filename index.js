@@ -118,39 +118,46 @@ app.get('/api/users/:_id/logs', (req, res) => {
   const userId = req.params._id;
   const {from, to, limit} = req.query;
 
-  User.findById(userId, (err, user) => {
-    if (err || !user){
-      return res.status(400).json("unknown userId")
-    } else {
+  User.findById(userId)
+    .then(user => {
+      if (!user){
+        // *** CHANGE THIS LINE ***
+        return res.status(400).json({ error: "unknown userId" }); 
+      }
+
       let filter = {userId: userId};
 
       if (from || to){
         filter.date = {};
         if (from) filter.date.$gte = new Date(from);
-        if(to) filter.date.$lte = new Date(to)
+        if(to) filter.date.$lte = new Date(to);
       }
 
-      let query = Exercise.find(filter).select('description duration date')
-      if(limit) query = query.limit(Number(limit))
-        query.exec((err, exercises) => {
-      if (err){
-        return res.status(500).json({ error: err });
-      } else {
-        res.json({
-        _id: user._id,
-        username: user.username,
-        count: exercises.length,
-        log: exercises.map(e => ({
-          description: e.description,
-          duration: e.duration,
-          date: e.date.toDateString()
-        }))
+      let query = Exercise.find(filter).select('description duration date');
+      if(limit) query = query.limit(Number(limit));
+
+      query.exec((err, exercises) => {
+        if (err){
+          return res.status(500).json({ error: err.message || "Error fetching logs" });
+        } else {
+          res.json({
+            _id: user._id,
+            username: user.username,
+            count: exercises.length,
+            log: exercises.map(e => ({
+              description: e.description,
+              duration: e.duration,
+              date: e.date.toDateString()
+            }))
+          });
+        }
       });
-      }
-      })
-    }
-  })
-})
+    })
+    .catch(err => {
+      
+      return res.status(500).json({ error: err.message || "Error finding user" });
+    });
+});
 //Get user logs
 
 
