@@ -98,45 +98,80 @@ app.post('/api/users/:_id/exercises', (req, res) => {
 
 
 //Get users
-app.get('/api/users/:_id/logs', async (req, res) => {
-  const { from, to, limit } = req.query;
-  const userId = req.params._id;
-
+app.get('/api/users', async (req, res) => {
   try {
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).send('User not found');
-
-    // Build filter object
-    const filter = { userId };
-    if (from || to) {
-      filter.date = {};
-      if (from) filter.date.$gte = new Date(from);
-      if (to) filter.date.$lte = new Date(to);
-    }
-
-    let query = Exercise.find(filter).select('description duration date');
-    if (limit) query = query.limit(parseInt(limit));
-
-    const exercises = await query.exec();
-
-    const log = exercises.map(e => ({
-      description: e.description,
-      duration: e.duration,
-      date: e.date.toDateString()
-    }));
-
-    res.json({
+    const users = await User.find({});
+    res.json(users.map(user => ({
       username: user.username,
-      count: log.length,
-      _id: user._id,
-      log
-    });
+      _id: user._id
+    })));
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server error');
+    res.status(500).json({ error: 'Error fetching users' });
   }
 });
 
+//Get users
+
+
+//Get user logs
+app.get('/api/users/:_id/logs', async (req, res) => {
+  const userId = req.params._id;
+  const { from, to, limit } = req.query;
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(400).json({ error: "unknown userId" });
+    }
+
+    let filter = { userId: userId };
+
+    if (from || to) {
+      filter.date = {};
+      if (from) {
+        const fromDate = new Date(from);
+        if (!isNaN(fromDate.getTime())) {
+          filter.date.$gte = fromDate;
+        }
+      }
+      if (to) {
+        const toDate = new Date(to);
+        if (!isNaN(toDate.getTime())) {
+      
+          toDate.setDate(toDate.getDate() + 1); 
+          filter.date.$lt = toDate;            
+        }
+      }
+    }
+
+    const totalCount = await Exercise.countDocuments(filter);
+
+    let query = Exercise.find(filter).select('description duration date');
+    if (limit) {
+      const parsedLimit = parseInt(limit);
+      if (!isNaN(parsedLimit) && parsedLimit > 0) {
+        query = query.limit(parsedLimit);
+      }
+    }
+
+    const exercises = await query;
+
+    res.json({
+      _id: user._id,
+      username: user.username,
+      count: totalCount,
+      log: exercises.map(e => ({
+        description: e.description,
+        duration: e.duration,
+        date: e.date.toDateString()
+      }))
+    });
+
+  } catch (err) {
+    console.error("Error in /api/users/:_id/logs:", err);
+    res.status(500).json({ error: err.message || "Error fetching logs" });
+  }
+});
 //Get user logs
 
 
