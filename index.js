@@ -114,12 +114,12 @@ app.get('/api/users', async (req, res) => {
 
 
 //Get user logs
-app.get('/api/users/:_id/logs', async (req, res) => { 
+app.get('/api/users/:_id/logs', async (req, res) => {
   const userId = req.params._id;
   const { from, to, limit } = req.query;
 
   try {
-    const user = await User.findById(userId); 
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(400).json({ error: "unknown userId" });
     }
@@ -130,7 +130,6 @@ app.get('/api/users/:_id/logs', async (req, res) => {
       filter.date = {};
       if (from) {
         const fromDate = new Date(from);
-        
         if (!isNaN(fromDate.getTime())) {
           filter.date.$gte = fromDate;
         }
@@ -138,33 +137,29 @@ app.get('/api/users/:_id/logs', async (req, res) => {
       if (to) {
         const toDate = new Date(to);
         if (!isNaN(toDate.getTime())) {
-          toDate.setDate(toDate.getDate() + 1)
-          filter.date.$lt = toDate;
+      
+          toDate.setDate(toDate.getDate() + 1); 
+          filter.date.$lt = toDate;            
         }
       }
     }
 
-  
     const totalCount = await Exercise.countDocuments(filter);
 
-    
     let query = Exercise.find(filter).select('description duration date');
-
-    
     if (limit) {
       const parsedLimit = parseInt(limit);
-      
       if (!isNaN(parsedLimit) && parsedLimit > 0) {
         query = query.limit(parsedLimit);
       }
     }
 
-    const exercises = await query; 
+    const exercises = await query;
 
     res.json({
       _id: user._id,
       username: user.username,
-      count: totalCount, 
+      count: totalCount,
       log: exercises.map(e => ({
         description: e.description,
         duration: e.duration,
@@ -173,8 +168,7 @@ app.get('/api/users/:_id/logs', async (req, res) => {
     });
 
   } catch (err) {
-  
-    console.error("Error in /api/users/:_id/logs:", err); 
+    console.error("Error in /api/users/:_id/logs:", err);
     res.status(500).json({ error: err.message || "Error fetching logs" });
   }
 });
