@@ -119,13 +119,16 @@ app.get('/api/users/:_id/logs', async (req, res) => {
   const { from, to, limit } = req.query;
 
   try {
+    // Find user first to verify existence
     const user = await User.findById(userId);
     if (!user) {
       return res.status(400).json({ error: "unknown userId" });
     }
 
+    // Build the filter
     let filter = { userId: userId };
-
+    
+    // Date filtering
     if (from || to) {
       filter.date = {};
       if (from) {
@@ -137,33 +140,39 @@ app.get('/api/users/:_id/logs', async (req, res) => {
       if (to) {
         const toDate = new Date(to);
         if (!isNaN(toDate.getTime())) {
-      
-          toDate.setDate(toDate.getDate() + 1); 
-          filter.date.$lt = toDate;            
+          filter.date.$lte = toDate; // Changed from $lt to $lte
         }
       }
     }
 
+    // Get total count (unfiltered by limit)
     const totalCount = await Exercise.countDocuments(filter);
 
-    let query = Exercise.find(filter).select('description duration date');
+    // Build query
+    let query = Exercise.find(filter)
+      .select('description duration date -_id')
+      .sort({ date: 'asc' }); // Sort by date ascending
+
+    // Apply limit if valid
     if (limit) {
       const parsedLimit = parseInt(limit);
-      if (!isNaN(parsedLimit) && parsedLimit > 0) {
+      if (!isNaN(parsedLimit) {
         query = query.limit(parsedLimit);
       }
     }
 
+    // Execute query
     const exercises = await query;
 
+    // Format response
     res.json({
       _id: user._id,
       username: user.username,
-      count: totalCount,
+      count: exercises.length, // Use actual returned count instead of totalCount
       log: exercises.map(e => ({
         description: e.description,
         duration: e.duration,
-        date: e.date.toDateString()
+        date: e.date.toDateString() // Ensure this matches exactly
       }))
     });
 
