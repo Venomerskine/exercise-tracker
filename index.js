@@ -98,63 +98,72 @@ app.post('/api/users/:_id/exercises', (req, res) => {
 
 
 //Get users
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await User.find({});
+    res.json(users.map(user => ({
+      username: user.username,
+      _id: user._id
+    })));
+  } catch (err) {
+    res.status(500).json({ error: 'Error fetching users' });
+  }
+});
+
+//Get users
+
+
+//Get user logs
 app.get('/api/users/:_id/logs', async (req, res) => {
   const userId = req.params._id;
   const { from, to, limit } = req.query;
 
   try {
-    // Verify user exists first
     const user = await User.findById(userId);
     if (!user) {
       return res.status(400).json({ error: "unknown userId" });
     }
 
-    // Build date filter
-    let dateFilter = {};
-    if (from) {
-      const fromDate = new Date(from);
-      if (!isNaN(fromDate.getTime())) {
-        dateFilter.$gte = fromDate;
-      }
-    }
-    if (to) {
-      const toDate = new Date(to);
-      if (!isNaN(toDate.getTime())) {
-        dateFilter.$lte = toDate;
-      }
-    }
-
-    // Build the complete filter
     let filter = { userId: userId };
-    if (Object.keys(dateFilter).length > 0) {
-      filter.date = dateFilter;
+
+    if (from || to) {
+      filter.date = {};
+      if (from) {
+        const fromDate = new Date(from);
+        if (!isNaN(fromDate.getTime())) {
+          filter.date.$gte = fromDate;
+        }
+      }
+      if (to) {
+        const toDate = new Date(to);
+        if (!isNaN(toDate.getTime())) {
+      
+          toDate.setDate(toDate.getDate() + 1); 
+          filter.date.$lt = toDate;            
+        }
+      }
     }
 
-    // Get unfiltered count for all exercises
-    const totalCount = await Exercise.countDocuments({ userId: userId });
+    const totalCount = await Exercise.countDocuments(filter);
 
-    // Build query
-    let query = Exercise.find(filter)
-      .select('description duration date')
-      .sort({ date: 'asc' });
-
-    // Apply limit if valid
-    if (limit && !isNaN(parseInt(limit))) {
-      query = query.limit(parseInt(limit));
+    let query = Exercise.find(filter).select('description duration date');
+    if (limit) {
+      const parsedLimit = parseInt(limit);
+      if (!isNaN(parsedLimit) && parsedLimit > 0) {
+        query = query.limit(parsedLimit);
+      }
     }
 
-    // Execute query
     const exercises = await query;
 
-    // Format response with proper type casting
     res.json({
       _id: user._id,
       username: user.username,
-      count: exercises.length, // Count of returned exercises
+      count: totalCount,
       log: exercises.map(e => ({
-        description: String(e.description), // Ensure string
-        duration: Number(e.duration),      // Ensure number
-        date: e.date.toDateString()        // Formatted date string
+        description: e.description,
+        duration: e.duration,
+        date: e.date.toDateString()
       }))
     });
 
