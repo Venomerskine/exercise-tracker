@@ -40,21 +40,17 @@ let Exercise = mongoose.model("Exercise", exerciseSchema);
 
 
 //Post user
-  app.post("/api/users", (req, res) => {
-   const username = req.body.username
-   new User ({
-    username,
-   }).save((err, data) => {
-    if(err) {
-      return res.status(500).json({err:"Error savig user"})
-    } else {
-      res.json({
-        username: data.username,
-        _id: data._id
-      })
-    }
-   })
-  })
+  app.post("/api/users", async (req, res) => {
+  try {
+    const username = req.body.username;
+    const user = new User({ username });
+    const data = await user.save();
+    res.json({ username: data.username, _id: data._id });
+  } catch (err) {
+    res.status(500).json({ error: "Error saving user" });
+  }
+});
+
 //Post user
 
 
@@ -95,16 +91,18 @@ let Exercise = mongoose.model("Exercise", exerciseSchema);
 
 
 //Get users
-app.get('/api/users', (req, res) => {
-  User.find({}, (err, users) => {
-    if (err) return res.status(500).json({ error: 'Error fetching user'});
-
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await User.find({});
     res.json(users.map(user => ({
       username: user.username,
       _id: user._id
     })));
-  });
+  } catch (err) {
+    res.status(500).json({ error: 'Error fetching users' });
+  }
 });
+
 //Get users
 
 
