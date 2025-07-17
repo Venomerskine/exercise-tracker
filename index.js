@@ -108,15 +108,28 @@ app.get('/api/users/:_id/logs', async (req, res) => {
       return res.json({ error: 'User not found' });
     }
 
-    let query = { userId };
+    // let query = { userId };
+    // if (from || to) {
+    //   query.date = {};
+    //   if (from) {
+    //     query.date.$gte = new Date(from);
+    //   }
+    //   if (to) {
+    //     query.date.$lte = new Date(to);
+    //   }
+    // }
+
+     let query = { userId: _id };
+    let dateFilter = {};
+    
+    if (from) {
+      dateFilter['$gte'] = new Date(from);
+    }
+    if (to) {
+      dateFilter['$lte'] = new Date(to);
+    }
     if (from || to) {
-      query.date = {};
-      if (from) {
-        query.date.$gte = new Date(from);
-      }
-      if (to) {
-        query.date.$lte = new Date(to);
-      }
+      query.date = dateFilter;
     }
 
     let exercisesQuery = Exercise.find(query).select('description duration date');
