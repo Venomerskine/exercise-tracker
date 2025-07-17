@@ -1,52 +1,44 @@
 require('dotenv').config();
 const express = require('express');
-const app = express();
 const cors = require('cors');
 const mongoose = require('mongoose');
+const bodyParser = require('body-parser');
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, {
+const app = express();
+
+// Basic Configuration
+const port = process.env.PORT || 3000;
+
+app.use(cors());
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
+app.use(express.static('public'));
+
+// Database Connection
+mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/exercise-tracker', {
   useNewUrlParser: true,
   useUnifiedTopology: true
 });
 
-// Schemas
-const userSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true }
-});
-const User = mongoose.model('User', userSchema);
+// Models
+const User = require('./models/User');
+const Exercise = require('./models/Exercise');
 
-const exerciseSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  description: { type: String, required: true },
-  duration: { type: Number, required: true },
-  date: { type: Date, default: Date.now }
-});
-const Exercise = mongoose.model('Exercise', exerciseSchema);
-
-// Middleware
-app.use(cors());
-app.use(express.json()); // For parsing application/json
-app.use(express.urlencoded({ extended: true })); // For parsing application/x-www-form-urlencoded
-app.use(express.static('public'));
-
+// Routes
 app.get('/', (req, res) => {
   res.sendFile(__dirname + '/views/index.html');
 });
 
-// API Endpoints
 // Create a new user
 app.post('/api/users', async (req, res) => {
+  const { username } = req.body;
+  
   try {
-    const { username } = req.body;
-    const newUser = new User({ username });
-    const savedUser = await newUser.save();
-    res.json({ username: savedUser.username, _id: savedUser._id });
+    const user = new User({ username });
+    await user.save();
+    res.json({ username: user.username, _id: user._id });
   } catch (err) {
-    if (err.code === 11000) { // Duplicate key error
-      return res.json({ error: 'Username already taken' });
-    }
-    res.status(500).json({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 });
 
@@ -60,91 +52,103 @@ app.get('/api/users', async (req, res) => {
   }
 });
 
-// Add an exercise
+// Add exercise
 app.post('/api/users/:_id/exercises', async (req, res) => {
+  const { _id } = req.params;
+  let { description, duration, date } = req.body;
+  
   try {
-    const userId = req.params._id;
-    const { description, duration, date } = req.body;
-
-    const user = await User.findById(userId);
+    // Validate input
+    if (!description || !duration) {
+      throw new Error('Description and duration are required');
+    }
+    
+    // Find user
+    const user = await User.findById(_id);
     if (!user) {
-      return res.json({ error: 'User not found' });
+      throw new Error('User not found');
     }
-
-    const newDate = date ? new Date(date) : new Date();
-    if (isNaN(newDate.getTime())) {
-      return res.json({ error: 'Invalid Date' });
-    }
-
-    const newExercise = new Exercise({
-      userId,
+    
+    // Parse date or use current date
+    const exerciseDate = date ? new Date(date) : new Date();
+    
+    // Create exercise
+    const exercise = new Exercise({
+      userId: _id,
       description,
       duration: parseInt(duration),
-      date: newDate
+      date: exerciseDate
     });
-
-    const savedExercise = await newExercise.save();
-
+    
+    await exercise.save();
+    
+    // Return user with exercise data
     res.json({
       _id: user._id,
       username: user.username,
-      date: savedExercise.date.toDateString(),
-      duration: savedExercise.duration,
-      description: savedExercise.description,
+      description: exercise.description,
+      duration: exercise.duration,
+      date: exercise.date.toDateString()
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 });
 
-// Get user log
+// Get exercise log
 app.get('/api/users/:_id/logs', async (req, res) => {
+  const { _id } = req.params;
+  const { from, to, limit } = req.query;
+  
   try {
-    const userId = req.params._id;
-    const { from, to, limit } = req.query;
-
-    const user = await User.findById(userId);
+    // Find user
+    const user = await User.findById(_id);
     if (!user) {
-      return res.json({ error: 'User not found' });
+      throw new Error('User not found');
     }
-
-    let query = { userId };
+    
+    // Build query
+    let query = { userId: _id };
+    let dateFilter = {};
+    
+    if (from) {
+      dateFilter['$gte'] = new Date(from);
+    }
+    if (to) {
+      dateFilter['$lte'] = new Date(to);
+    }
     if (from || to) {
-      query.date = {};
-      if (from) {
-        query.date.$gte = new Date(from);
-      }
-      if (to) {
-        query.date.$lte = new Date(to);
-      }
+      query.date = dateFilter;
     }
-
-    let exercisesQuery = Exercise.find(query).select('description duration date');
-
+    
+    // Get exercises
+    let exercisesQuery = Exercise.find(query);
+    
     if (limit) {
       exercisesQuery = exercisesQuery.limit(parseInt(limit));
     }
-
+    
     const exercises = await exercisesQuery.exec();
-
+    
+    // Format response
     const log = exercises.map(ex => ({
       description: ex.description,
       duration: ex.duration,
       date: ex.date.toDateString()
     }));
-
+    
     res.json({
       _id: user._id,
       username: user.username,
       count: log.length,
-      log: log
+      log
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(400).json({ error: err.message });
   }
 });
 
-// Listen for requests
-const listener = app.listen(process.env.PORT || 3000, () => {
+// Database connection and server start
+const listener = app.listen(port, () => {
   console.log('Your app is listening on port ' + listener.address().port);
 });
