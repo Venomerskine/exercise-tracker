@@ -156,7 +156,7 @@ app.get('/api/users/:_id/logs', async (req, res) => {
     // Apply limit if valid
     if (limit) {
       const parsedLimit = parseInt(limit);
-      if (!isNaN(parsedLimit) {
+      if (!isNaN(parsedLimit)) {
         query = query.limit(parsedLimit);
       }
     }
