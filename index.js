@@ -121,8 +121,8 @@ app.get('/api/users/:_id/logs', (req, res) => {
   User.findById(userId)
     .then(user => {
       if (!user){
-        // *** CHANGE THIS LINE ***
-        return res.status(400).json({ error: "unknown userId" }); 
+        // Ensure this is "unknown userId" as discussed previously for FCC tests
+        return res.status(400).json({ error: "unknown userId" });
       }
 
       let filter = {userId: userId};
@@ -135,11 +135,8 @@ app.get('/api/users/:_id/logs', (req, res) => {
 
       let query = Exercise.find(filter).select('description duration date');
       if(limit) query = query.limit(Number(limit));
-
-      query.exec((err, exercises) => {
-        if (err){
-          return res.status(500).json({ error: err.message || "Error fetching logs" });
-        } else {
+      query 
+        .then(exercises => {
           res.json({
             _id: user._id,
             username: user.username,
@@ -150,11 +147,15 @@ app.get('/api/users/:_id/logs', (req, res) => {
               date: e.date.toDateString()
             }))
           });
-        }
-      });
+        })
+        .catch(err => {
+          return res.status(500).json({ error: err.message || "Error fetching logs" });
+        });
+     
+
     })
     .catch(err => {
-      
+    
       return res.status(500).json({ error: err.message || "Error finding user" });
     });
 });
