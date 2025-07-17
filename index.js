@@ -99,74 +99,66 @@ app.post('/api/users/:_id/exercises', async (req, res) => {
 
 // Get user log
 app.get('/api/users/:_id/logs', async (req, res) => {
-  try {
-    const userId = req.params._id;
-    const { from, to, limit } = req.query;
+  const userId = req.params._id;
+  const { from, to, limit } = req.query;
 
+  try {
     const user = await User.findById(userId);
     if (!user) {
-      return res.json({ error: 'User not found' });
+      return res.status(400).json({ error: "unknown userId" });
     }
 
-    // let query = { userId };
-    // if (from || to) {
-    //   query.date = {};
-    //   if (from) {
-    //     query.date.$gte = new Date(from);
-    //   }
-    //   if (to) {
-    //     query.date.$lte = new Date(to);
-    //   }
-    // }
+    let filter = { userId: userId };
 
-    //  let query = { userId: _id };
-    // let dateFilter = {};
-    
-    // if (from) {
-    //   dateFilter['$gte'] = new Date(from);
-    // }
-    // if (to) {
-    //   dateFilter['$lte'] = new Date(to);
-    // }
-    // if (from || to) {
-    //   query.date = dateFilter;
-    // }
+    if (from || to) {
+      filter.date = {};
+      if (from) {
+        const fromDate = new Date(from);
+        if (!isNaN(fromDate.getTime())) {
+          filter.date.$gte = fromDate;
+        }
+      }
+      if (to) {
+        const toDate = new Date(to);
+        if (!isNaN(toDate.getTime())) {
+          toDate.setDate(toDate.getDate() + 1);
+          filter.date.$lt = toDate;
+        }
+      }
+    }
 
-    if (from && !isNaN(Date.parse(from))) dateFilter.$gte = new Date(from);
-if (to && !isNaN(Date.parse(to))) dateFilter.$lte = new Date(to);
+    // *** REMOVE this line as it calculates count BEFORE limit: ***
+    // const totalCount = await Exercise.countDocuments(filter);
 
+    let query = Exercise.find(filter).select('description duration date');
 
-    const query = { userId: userId || _id }; // use fallback if needed
-if (from || to) {
-  const dateFilter = {};
-  if (from) dateFilter.$gte = new Date(from);
-  if (to) dateFilter.$lte = new Date(to);
-  query.date = dateFilter;
-}
-
-
-    let exercisesQuery = Exercise.find(query).select('description duration date');
+    // Keep the sorting we added (this is good practice for logs)
+    query = query.sort({ date: 1 });
 
     if (limit) {
-      exercisesQuery = exercisesQuery.limit(parseInt(limit));
+      const parsedLimit = parseInt(limit);
+      if (!isNaN(parsedLimit) && parsedLimit > 0) {
+        query = query.limit(parsedLimit);
+      }
     }
 
-    const exercises = await exercisesQuery.exec();
-
-    const log = exercises.map(ex => ({
-      description: ex.description,
-      duration: ex.duration,
-      date: ex.date.toDateString()
-    }));
+    const exercises = await query; // This 'exercises' array is already limited/filtered
 
     res.json({
       _id: user._id,
       username: user.username,
-      count: log.length,
-      log: log
+      // *** CHANGE THIS LINE TO MATCH THE WORKING SOLUTION'S COUNT LOGIC ***
+      count: exercises.length, // Count is now the length of the (potentially) limited log
+      log: exercises.map(e => ({
+        description: e.description,
+        duration: e.duration,
+        date: e.date.toDateString()
+      }))
     });
+
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error in /api/users/:_id/logs:", err);
+    res.status(500).json({ error: err.message || "Error fetching logs" });
   }
 });
 
