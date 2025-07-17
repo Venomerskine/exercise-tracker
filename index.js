@@ -119,18 +119,31 @@ app.get('/api/users/:_id/logs', async (req, res) => {
     //   }
     // }
 
-     let query = { userId: _id };
-    let dateFilter = {};
+    //  let query = { userId: _id };
+    // let dateFilter = {};
     
-    if (from) {
-      dateFilter['$gte'] = new Date(from);
-    }
-    if (to) {
-      dateFilter['$lte'] = new Date(to);
-    }
-    if (from || to) {
-      query.date = dateFilter;
-    }
+    // if (from) {
+    //   dateFilter['$gte'] = new Date(from);
+    // }
+    // if (to) {
+    //   dateFilter['$lte'] = new Date(to);
+    // }
+    // if (from || to) {
+    //   query.date = dateFilter;
+    // }
+
+    if (from && !isNaN(Date.parse(from))) dateFilter.$gte = new Date(from);
+if (to && !isNaN(Date.parse(to))) dateFilter.$lte = new Date(to);
+
+
+    const query = { userId: userId || _id }; // use fallback if needed
+if (from || to) {
+  const dateFilter = {};
+  if (from) dateFilter.$gte = new Date(from);
+  if (to) dateFilter.$lte = new Date(to);
+  query.date = dateFilter;
+}
+
 
     let exercisesQuery = Exercise.find(query).select('description duration date');
 
