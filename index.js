@@ -114,50 +114,68 @@ app.get('/api/users', async (req, res) => {
 
 
 //Get user logs
-app.get('/api/users/:_id/logs', (req, res) => {
+app.get('/api/users/:_id/logs', async (req, res) => { 
   const userId = req.params._id;
-  const {from, to, limit} = req.query;
+  const { from, to, limit } = req.query;
 
-  User.findById(userId)
-    .then(user => {
-      if (!user){
-        // Ensure this is "unknown userId" as discussed previously for FCC tests
-        return res.status(400).json({ error: "unknown userId" });
+  try {
+    const user = await User.findById(userId); 
+    if (!user) {
+      return res.status(400).json({ error: "unknown userId" });
+    }
+
+    let filter = { userId: userId };
+
+    if (from || to) {
+      filter.date = {};
+      if (from) {
+        const fromDate = new Date(from);
+        
+        if (!isNaN(fromDate.getTime())) {
+          filter.date.$gte = fromDate;
+        }
       }
-
-      let filter = {userId: userId};
-
-      if (from || to){
-        filter.date = {};
-        if (from) filter.date.$gte = new Date(from);
-        if(to) filter.date.$lte = new Date(to);
+      if (to) {
+        const toDate = new Date(to);
+        if (!isNaN(toDate.getTime())) {
+          filter.date.$lte = toDate;
+        }
       }
+    }
 
-      let query = Exercise.find(filter).select('description duration date');
-      if(limit) query = query.limit(Number(limit));
-      query 
-        .then(exercises => {
-          res.json({
-            _id: user._id,
-            username: user.username,
-            count: exercises.length,
-            log: exercises.map(e => ({
-              description: e.description,
-              duration: e.duration,
-              date: e.date.toDateString()
-            }))
-          });
-        })
-        .catch(err => {
-          return res.status(500).json({ error: err.message || "Error fetching logs" });
-        });
-     
+  
+    const totalCount = await Exercise.countDocuments(filter);
 
-    })
-    .catch(err => {
     
-      return res.status(500).json({ error: err.message || "Error finding user" });
+    let query = Exercise.find(filter).select('description duration date');
+
+    
+    if (limit) {
+      const parsedLimit = parseInt(limit);
+      
+      if (!isNaN(parsedLimit) && parsedLimit > 0) {
+        query = query.limit(parsedLimit);
+      }
+    }
+
+    const exercises = await query; 
+
+    res.json({
+      _id: user._id,
+      username: user.username,
+      count: totalCount, 
+      log: exercises.map(e => ({
+        description: e.description,
+        duration: e.duration,
+        date: e.date.toDateString()
+      }))
     });
+
+  } catch (err) {
+  
+    console.error("Error in /api/users/:_id/logs:", err); 
+    res.status(500).json({ error: err.message || "Error fetching logs" });
+  }
 });
 //Get user logs
 
