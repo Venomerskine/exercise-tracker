@@ -120,7 +120,7 @@ app.get('/api/users/:_id/logs', (req, res) => {
 
   User.findById(userId, (err, user) => {
     if (err || !user){
-      return res.status(400).json("unknown user id")
+      return res.status(400).json("unknown userId")
     } else {
       let filter = {userId: userId};
 
