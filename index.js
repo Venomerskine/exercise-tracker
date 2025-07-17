@@ -40,52 +40,59 @@ let Exercise = mongoose.model("Exercise", exerciseSchema);
 
 
 //Post user
-  app.post("/api/users", async (req, res) => {
-  try {
-    const username = req.body.username;
-    const user = new User({ username });
-    const data = await user.save();
-    res.json({ username: data.username, _id: data._id });
-  } catch (err) {
-    res.status(500).json({ error: "Error saving user" });
-  }
+  app.post("/api/users", (req, res) => {
+   const username = req.body.username;
+   new User ({
+    username,
+   }).save() 
+    .then(data => { 
+      res.json({
+        username: data.username,
+        _id: data._id
+      });
+    })
+    .catch(err => { 
+            return res.status(500).json({err: err.message || "Error saving user"});
+    });
 });
 
 //Post user
 
 
 //Post Exercise
-  app.post('/api/users/:_id/exercises', (req, res) => {
-    const userId = req.params._id
-    const {description, duration, date} = req.body
+app.post('/api/users/:_id/exercises', (req, res) => {
+    const userId = req.params._id;
+    const {description, duration, date} = req.body;
 
-    User.findById(userId, (err, user) => {
-      if(err || !user){
-        return res.status(400).json("unknown userId")
-      } else {
-      
-      new Exercise ({
-      userId,
-      description,
-      duration: Number(duration),
-      date: date ? new Date(date) : new Date()
+    User.findById(userId) 
+      .then(user => {
+        if (!user){ 
+            return res.status(400).json({ error: "User not found" }); 
+        }
 
-    }).save((err, data) => {
-      if(err){
-        return res.status(500).json({ error: "unknown userId" });
-      } else {
-        res.json({
-        _id: user._id,
-        username: user.username,
-        description: data.description,
-        duration: data.duration,
-        date: data.date.toDateString()
+        new Exercise ({
+            userId,
+            description,
+            duration: Number(duration),
+            date: date ? new Date(date) : new Date()
+        }).save() 
+          .then(data => { 
+            res.json({
+                _id: user._id,
+                username: user.username,
+                description: data.description,
+                duration: data.duration,
+                date: data.date.toDateString()
+            });
+          })
+          .catch(err => { 
+            return res.status(500).json({ error: err.message || "Error saving exercise" });
+          });
+      })
+      .catch(err => { 
+        return res.status(500).json({ error: err.message || "Error finding user" });
       });
-      }
-    })
-      }
-    })
-  })
+});
 //Post Exercise
 
 
