@@ -6,7 +6,7 @@ const mongoose = require('mongoose')
 const { Schema } = require('mongoose');
 const bodyParser = require('body-parser')
 
-const MONGO_URI = process.env.MONGO_URL;
+const MONGO_URI = process.env.MONGO_URI;
 
 mongoose.connect(MONGO_URI);
 
