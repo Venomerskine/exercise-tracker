@@ -16,8 +16,8 @@ const userSchema = new Schema({
     required: true
   },
   log: [{
-     date: String,
-     duration: Number,
+    date: { type: Date },
+    duration: Number,
     description: String,
       }],
   count: Number
@@ -41,13 +41,15 @@ app.route('/api/users')
       if (err) {
         return res.json({ error: 'Error saving user' });
       }
-      res.json({data});
+      res.json({ username: data.username, _id: data._id });
+
     });
   })
   .get((req, res) => {
     User.find((err, data) => {
       if (data) {
-        res.json(data);
+        res.json({ username: data.username, _id: data._id });
+
       }
     });
 })
@@ -55,14 +57,15 @@ app.route('/api/users')
 app.post('/api/users/:_id/exercises', (req, res) => {
   const {description } = req.body;
   const duration = parseInt(req.body.duration)
-  const date = req.body.date ? req.body.date : (new Date()).toUTCString()
+  const date = req.body.date ? new Date(req.body.date) : new Date();
   const id = req.params._id;
 
-  const exercise = {
-    date,
-    duration,
-    description
-  }
+ const exercise = {
+  date: date.toDateString(),
+  duration,
+  description
+};
+
 
 User.findByIdAndUpdate(id, {
   $push: {log: exercise}, 
@@ -84,18 +87,34 @@ app.get('/api/users/:_id/logs', (req, res) => {
 
   User.findById(req.params._id, (err, user) => {
     if (user) {
-      if (from || to || limit) {
-        const logs = user.log;
-        const filteredLogs = logs.filter(log => {
-          const formattedLogDate = new Date(log.date).toISOString().split('T')[0];
-          return true; 
-        });
+     let logs = user.log.map(entry => ({
+          description: entry.description,
+          duration: entry.duration,
+          date: new Date(entry.date).toDateString()
+        }));
 
-        const slicedLogs = limit ? filteredLogs.slice(0, limit) : filteredLogs;
-        user.log = slicedLogs;
+      if (from) {
+        const fromDate = new Date(from);
+        logs = logs.filter(e => new Date(e.date) >= fromDate);
       }
 
-      res.json(user);
+      if (to) {
+        const toDate = new Date(to);
+        logs = logs.filter(e => new Date(e.date) <= toDate);
+      }
+
+      if (limit) {
+        logs = logs.slice(0, Number(limit));
+      }
+
+
+      res.json({
+        username: user.username,
+        count: user.count,
+        _id: user._id,
+        log: logs
+  });
+
     }
   });
 });
