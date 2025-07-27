@@ -39,7 +39,7 @@ app.route('/api/users')
     const user = new User({ username, count: 0 });
     user.save( (err, data) => {
       if (err) {
-        res.json({ error: 'Error saving user' });
+        return res.json({ error: 'Error saving user' });
       }
       res.json({data});
     });
@@ -80,27 +80,26 @@ User.findByIdAndUpdate(id, {
 })
 
 app.get('/api/users/:_id/logs', (req, res) => {
-  const {from, to, limit} = req.query
+  const { from, to, limit } = req.query;
 
   User.findById(req.params._id, (err, user) => {
-    if(User){
-      if(from ||to || limit) {
-      const logs = user.log
-      const filteredLogs = logs
-      .filter(log => {
-        const formattedLogDate = (new Date(log.date).toISOString().split('T')[0])
-        return true
-      }
-      )
+    if (user) {
+      if (from || to || limit) {
+        const logs = user.log;
+        const filteredLogs = logs.filter(log => {
+          const formattedLogDate = new Date(log.date).toISOString().split('T')[0];
+          return true; 
+        });
 
-      const slicedLogs = limit ? filteredLogs.slice(0, limit): filteredLogs
-     user.log = slicedLogs
+        const slicedLogs = limit ? filteredLogs.slice(0, limit) : filteredLogs;
+        user.log = slicedLogs;
       }
-    
-      res.json(user)
+
+      res.json(user);
     }
-  })
-})
+  });
+});
+
 
 app.get('/mongo-health', (req, res) => {
   res.json({ status: mongoose.connection.readyState });
