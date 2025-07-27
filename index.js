@@ -21,22 +21,18 @@ app.get('/', (req, res) => {
 
 
 //schema variables
-let userSchema = new mongoose.Schema({
-  username: {type: String, required: true},
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true },
+  count: { type: Number, default: 0 },
+  log: [{
+    description: String,
+    duration: Number,
+    date: Date
+  }]
 });
 
-let exerciseSchema = new mongoose.Schema({ 
-  userId: {type: mongoose.Schema.Types.ObjectId, ref: 'User'},
-  description: String,
-  duration: Number,
-  date: Date
-});
-//schema variables
+const User = mongoose.model("User", userSchema);
 
-
-
-let User = mongoose.model("User", userSchema)
-let Exercise = mongoose.model("Exercise", exerciseSchema);
 
 
 //Post user
@@ -61,38 +57,36 @@ let Exercise = mongoose.model("Exercise", exerciseSchema);
 
 //Post Exercise
 app.post('/api/users/:_id/exercises', (req, res) => {
-    const userId = req.params._id;
-    const {description, duration, date} = req.body;
+  const userId = req.params._id;
+  const { description, duration, date } = req.body;
 
-    User.findById(userId) 
-      .then(user => {
-        if (!user){ 
-            return res.status(400).json({ error: "User not found" }); 
-        }
+  const exercise = {
+    description,
+    duration: parseInt(duration),
+    date: date ? new Date(date) : new Date()
+  };
 
-        new Exercise ({
-            userId,
-            description,
-            duration: Number(duration),
-            date: date ? new Date(date) : new Date()
-        }).save() 
-          .then(data => { 
-            res.json({
-                _id: user._id,
-                username: user.username,
-                description: data.description,
-                duration: data.duration,
-                date: data.date.toDateString()
-            });
-          })
-          .catch(err => { 
-            return res.status(500).json({ error: err.message || "Error saving exercise" });
-          });
-      })
-      .catch(err => { 
-        return res.status(500).json({ error: err.message || "Error finding user" });
+  User.findByIdAndUpdate(
+    userId,
+    {
+      $push: { log: exercise },
+      $inc: { count: 1 }
+    },
+    { new: true },
+    (err, user) => {
+      if (err || !user) return res.status(400).json({ error: 'User not found' });
+
+      res.json({
+        _id: user._id,
+        username: user.username,
+        description: exercise.description,
+        duration: exercise.duration,
+        date: exercise.date.toDateString()
       });
+    }
+  );
 });
+
 //Post Exercise
 
 
@@ -114,64 +108,42 @@ app.get('/api/users', async (req, res) => {
 
 
 //Get user logs
-app.get('/api/users/:_id/logs', async (req, res) => {
-  const userId = req.params._id;
+app.get('/api/users/:_id/logs', (req, res) => {
   const { from, to, limit } = req.query;
+  const userId = req.params._id;
 
-  try {
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(400).json({ error: "unknown userId" });
+  User.findById(userId, (err, user) => {
+    if (err || !user) return res.status(400).json({ error: 'User not found' });
+
+    let logs = user.log.map(log => ({
+      description: log.description,
+      duration: log.duration,
+      date: new Date(log.date).toDateString()
+    }));
+
+    if (from) {
+      const fromDate = new Date(from);
+      logs = logs.filter(log => new Date(log.date) >= fromDate);
     }
 
-    let filter = { userId: userId };
-
-    if (from || to) {
-      filter.date = {};
-      if (from) {
-        const fromDate = new Date(from);
-        if (!isNaN(fromDate.getTime())) {
-          filter.date.$gte = fromDate;
-        }
-      }
-      if (to) {
-        const toDate = new Date(to);
-        if (!isNaN(toDate.getTime())) {
-      
-          toDate.setDate(toDate.getDate() + 1); 
-          filter.date.$lt = toDate;            
-        }
-      }
+    if (to) {
+      const toDate = new Date(to);
+      logs = logs.filter(log => new Date(log.date) <= toDate);
     }
 
-    const totalCount = await Exercise.countDocuments(filter);
-
-    let query = Exercise.find(filter).select('description duration date');
     if (limit) {
-      const parsedLimit = parseInt(limit);
-      if (!isNaN(parsedLimit) && parsedLimit > 0) {
-        query = query.limit(parsedLimit);
-      }
+      logs = logs.slice(0, parseInt(limit));
     }
-
-    const exercises = await query;
 
     res.json({
-      _id: user._id,
       username: user.username,
-      count: totalCount,
-      log: exercises.map(e => ({
-        description: e.description,
-        duration: e.duration,
-        date: e.date.toDateString()
-      }))
+      count: user.count,
+      _id: user._id,
+      log: logs
     });
-
-  } catch (err) {
-    console.error("Error in /api/users/:_id/logs:", err);
-    res.status(500).json({ error: err.message || "Error fetching logs" });
-  }
+  });
 });
+
 //Get user logs
 
 
