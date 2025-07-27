@@ -80,26 +80,27 @@ User.findByIdAndUpdate(id, {
 })
 
 app.get('/api/users/:_id/logs', (req, res) => {
-  const { from, to, limit } = req.query;
+  const {from, to, limit} = req.query
 
   User.findById(req.params._id, (err, user) => {
-    if (user) {
-      if (from || to || limit) {
-        const logs = user.log;
-        const filteredLogs = logs.filter(log => {
-          const formattedLogDate = new Date(log.date).toISOString().split('T')[0];
-          return true; 
-        });
-
-        const slicedLogs = limit ? filteredLogs.slice(0, limit) : filteredLogs;
-        user.log = slicedLogs;
+    if(User){
+      if(from ||to || limit) {
+      const logs = user.log
+      const filteredLogs = logs
+      .filter(log => {
+        const formattedLogDate = (new Date(log.date).toISOString().split('T')[0])
+        return true
       }
+      )
 
-      res.json(user);
+      const slicedLogs = limit ? filteredLogs.slice(0, limit): filteredLogs
+     user.log = slicedLogs
+      }
+    
+      res.json(user)
     }
-  });
-});
-
+  })
+})
 
 app.get('/mongo-health', (req, res) => {
   res.json({ status: mongoose.connection.readyState });
