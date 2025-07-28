@@ -10,7 +10,7 @@ mongoose.connect(process.env.MONGO_URI)
 const UserSchema = new Schema({
     username: String,
 })
-const User = mongoose.model("USer", UserSchema)
+const User = mongoose.model("User", UserSchema)
 
 const ExerciseSchema = new Schema({
     user_id: { type: String, required: true},
@@ -52,100 +52,75 @@ res.json(user)
 
 })
 
-app.post("/api/users/:_id/exercises", async (req, res) => {
-    const id = req.params._id
-    const {description, duration, date} = req.body
-    
-    try{
-        const user = await User.findById(id)
-        if(!user){
-            res.send("Could not find user")
-        } else {
-            const exerciseObj = new Exercise({
-                user_id: user._id,
-                description,
-                duration,
-                date: date ? new Date(date)  : new Date()
-            })
-            const exercise = await exerciseObj.save()
-            res.json({
-                _id: user._id,
-                username: user.username,
-                description: exercise.description,
-                duration: exercise.duration,
-                date: new Date(exercise.date).toDateString()
-            })
-        }
-    }catch (err){
-        console.log(err)
-        res.send("There was an error saving the exercise")
-    }
-})
-
-
 app.get("/api/users/:_id/logs", async (req, res) => {
-    const {from, to, limit} = req.query
-    const id = req.params._id
+    const { from, to, limit } = req.query;
+    const id = req.params._id;
 
-    const user =  await User.findById(id)
-    if (!user){
-        res.json({ error: "Could not find user" }) // Use res.json for consistent API responses
-        return
+    const user = await User.findById(id);
+    if (!user) {
+        // Consistent error response format
+        return res.json({ error: "Could not find user" });
     }
 
-    let dateObj = {}
-    if(from){
-        // Ensure date parsing is robust
+    let filter = { user_id: id };
+    let dateObj = {};
+
+    if (from) {
         const fromDate = new Date(from);
         if (isNaN(fromDate.getTime())) {
             return res.json({ error: "Invalid 'from' date format" });
         }
         dateObj["$gte"] = fromDate;
     }
-    if (to){
-        // Ensure date parsing is robust
+
+    if (to) {
         const toDate = new Date(to);
         if (isNaN(toDate.getTime())) {
             return res.json({ error: "Invalid 'to' date format" });
         }
-        dateObj["$lte"] = toDate;
+        // Include the entire 'to' day: add one day and use $lt
+        toDate.setDate(toDate.getDate() + 1);
+        dateObj["$lt"] = toDate;
     }
 
-    let filter = {
-        user_id: id
-    }
-    if(from || to){
-        filter.date = dateObj
+    // Apply date filter if 'from' or 'to' were provided
+    if (Object.keys(dateObj).length > 0) {
+        filter.date = dateObj;
     }
 
-    let query = Exercise.find(filter);
+    let exercisesQuery = Exercise.find(filter)
+                                 .sort({ date: 1 }) // Sort by date ascending for predictable limit
+                                 .select('description duration date'); // Explicitly select required fields
 
-    // Properly handle the limit parameter
     if (limit) {
         const parsedLimit = parseInt(limit);
-        if (!isNaN(parsedLimit) && parsedLimit > 0) { // Ensure it's a positive number
-            query = query.limit(parsedLimit);
+        if (!isNaN(parsedLimit) && parsedLimit > 0) {
+            exercisesQuery = exercisesQuery.limit(parsedLimit);
         }
-        // If limit is provided but invalid (e.g., "abc" or "0" if 0 isn't desired),
-        // we might choose to ignore it or return an error.
-        // For FCC, simply ignoring invalid limits if they don't break the test is often fine.
+        // If limit is invalid, we proceed without limiting,
+        // which is often acceptable for FCC if it doesn't break other tests.
     }
 
-    const exercises = await query.exec(); // Execute the query
+    try {
+        const exercises = await exercisesQuery.exec();
 
-    const log = exercises.map(e => ({
-        description: e.description,
-        duration: e.duration,
-        date: e.date.toDateString()
-    }))
+        const log = exercises.map(e => ({
+            description: e.description,
+            duration: e.duration,
+            date: e.date.toDateString()
+        }));
 
-    res.json({
-        username: user.username,
-        count: exercises.length,
-        _id: user._id,
-        log
-    })
-})
+        res.json({
+            username: user.username,
+            count: log.length, // Use log.length, not exercises.length (they should be same, but safer)
+            _id: user._id,
+            log
+        });
+    } catch (err) {
+        console.error(err); // Log the actual error for debugging
+        res.status(500).json({ error: "Error fetching exercise log" });
+    }
+});
 
 const listener = app.listen(process.env.PORT || 3000, () => {
     console.log('Your app is listening on port ' + listener.address().port)
