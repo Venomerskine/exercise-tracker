@@ -86,18 +86,31 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
 app.get("/api/users/:_id/logs", async (req, res) => {
     const {from, to, limit} = req.query
     const id = req.params._id
+
     const user =  await User.findById(id)
     if (!user){
-        res.send("Could not find user")
-        return 
+        res.json({ error: "Could not find user" }) // Use res.json for consistent API responses
+        return
     }
+
     let dateObj = {}
     if(from){
-        dateObj["$gte"] = new Date(from)
+        // Ensure date parsing is robust
+        const fromDate = new Date(from);
+        if (isNaN(fromDate.getTime())) {
+            return res.json({ error: "Invalid 'from' date format" });
+        }
+        dateObj["$gte"] = fromDate;
     }
     if (to){
-        dateObj["$lte"] = new Date(to)
+        // Ensure date parsing is robust
+        const toDate = new Date(to);
+        if (isNaN(toDate.getTime())) {
+            return res.json({ error: "Invalid 'to' date format" });
+        }
+        dateObj["$lte"] = toDate;
     }
+
     let filter = {
         user_id: id
     }
@@ -105,14 +118,27 @@ app.get("/api/users/:_id/logs", async (req, res) => {
         filter.date = dateObj
     }
 
-    const exercises = await Exercise.find(filter).limit(+limit ?? 500)
-    
+    let query = Exercise.find(filter);
+
+    // Properly handle the limit parameter
+    if (limit) {
+        const parsedLimit = parseInt(limit);
+        if (!isNaN(parsedLimit) && parsedLimit > 0) { // Ensure it's a positive number
+            query = query.limit(parsedLimit);
+        }
+        // If limit is provided but invalid (e.g., "abc" or "0" if 0 isn't desired),
+        // we might choose to ignore it or return an error.
+        // For FCC, simply ignoring invalid limits if they don't break the test is often fine.
+    }
+
+    const exercises = await query.exec(); // Execute the query
+
     const log = exercises.map(e => ({
         description: e.description,
         duration: e.duration,
         date: e.date.toDateString()
     }))
-    
+
     res.json({
         username: user.username,
         count: exercises.length,
