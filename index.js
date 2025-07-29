@@ -15,10 +15,8 @@ app.use(bodyParser.urlencoded({ extended: false }));
 
 //* MongoDB
 
-mongoose.connect(process.env.MONGO_URI, {
-	useNewUrlParser: true,
-	useUnifiedTopology: true,
-});
+mongoose.connect(MONGO_URI);
+
 
 //* Schemas
 
@@ -115,27 +113,19 @@ app.get('/api/users', function (_req, res) {
  * POST
  * Create a new user
  */
-app.post('/api/users', function (req, res) {
-	const inputUsername = req.body.username;
+app.post('/api/users', async (req, res) => {
+  try {
+    const username = req.body.username;
+    const user = new User({ username });
 
-	console.log('### create a new user ###'.toLocaleUpperCase());
-
-	//? Create a new user
-	let newUser = new User({ username: inputUsername });
-
-	console.log(
-		'creating a new user with username - '.toLocaleUpperCase() + inputUsername
-	);
-
-	newUser.save((err, user) => {
-		if (err) {
-			console.error(err);
-			res.json({ message: 'User creation failed!' });
-		}
-
-		res.json({ username: user.username, _id: user._id });
-	});
+    const savedUser = await user.save(); // 
+    res.json({ username: savedUser.username, _id: savedUser._id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
+
 
 /*
  * POST
