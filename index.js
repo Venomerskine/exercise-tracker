@@ -1,127 +1,244 @@
-const express = require('express')
-const app = express()
-const cors = require('cors')
-require('dotenv').config()
-const mongoose = require('mongoose')
-const {Schema} = mongoose
+const express = require('express');
+const app = express();
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const mongoose = require('mongoose');
+const shortid = require('shortid');
 
-mongoose.connect(process.env.MONGO_URI)
+require('dotenv').config();
 
-const UserSchema = new Schema({
-    username: String,
-})
-const User = mongoose.model("User", UserSchema)
+//* Middleware
 
-const ExerciseSchema = new Schema({
-    user_id: { type: String, required: true},
-    description: String,
-    duration: Number,
-    date: Date,
-})
-const Exercise = mongoose.model("Exercise", ExerciseSchema)
+app.use(cors());
+app.use(express.static('public'));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
 
-app.use(cors())
-app.use(express.static('public'))
-app.use(express.urlencoded({extended: true}))
-app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/views/index.html')
-})
+//* MongoDB
 
-app.get("/api/users", async (req, res) => {
-    const users = await User.find({}).select("_id username")
-    if (!users) {
-        res.send("No users")
-    } else {
-        res.json(users) 
-    }
-})
+mongoose.connect(process.env.MONGO_URI, {
+	useNewUrlParser: true,
+	useUnifiedTopology: true,
+});
 
-app.post("/api/users", async (req, res) => {
+//* Schemas
 
-    const userObj = new User({
-   username: req.body.username
-})
+const exerciseSchema = new mongoose.Schema({
+	userId: String,
+	username: String,
+	description: { type: String, required: true },
+	duration: { type: Number, required: true },
+	date: String,
+});
 
-try{
-const user = await userObj.save()
+const userSchema = new mongoose.Schema({
+	username: String,
+});
 
-res.json(user)
-}catch(err){
-    console.log(err)
-}
+//* Models
 
-})
+let User = mongoose.model('User', userSchema);
 
-app.get("/api/users/:_id/logs", async (req, res) => {
-    const { from, to, limit } = req.query;
-    const id = req.params._id;
+let Exercise = mongoose.model('Exercise', exerciseSchema);
 
-    const user = await User.findById(id);
-    if (!user) {
-        // Consistent error response format
-        return res.json({ error: "Could not find user" });
-    }
+//* Endpoints
 
-    let filter = { user_id: id };
-    let dateObj = {};
+/*
+ * GET
+ * Delete all users
+ */
+app.get('/api/users/delete', function (_req, res) {
+	console.log('### delete all users ###'.toLocaleUpperCase());
 
-    if (from) {
-        const fromDate = new Date(from);
-        if (isNaN(fromDate.getTime())) {
-            return res.json({ error: "Invalid 'from' date format" });
-        }
-        dateObj["$gte"] = fromDate;
-    }
+	User.deleteMany({}, function (err, result) {
+		if (err) {
+			console.error(err);
+			res.json({
+				message: 'Deleting all users failed!',
+			});
+		}
 
-    if (to) {
-        const toDate = new Date(to);
-        if (isNaN(toDate.getTime())) {
-            return res.json({ error: "Invalid 'to' date format" });
-        }
-        // Include the entire 'to' day: add one day and use $lt
-        toDate.setDate(toDate.getDate() + 1);
-        dateObj["$lt"] = toDate;
-    }
+		res.json({ message: 'All users have been deleted!', result: result });
+	});
+});
 
-    // Apply date filter if 'from' or 'to' were provided
-    if (Object.keys(dateObj).length > 0) {
-        filter.date = dateObj;
-    }
+/*
+ * GET
+ * Delete all exercises
+ */
+app.get('/api/exercises/delete', function (_req, res) {
+	console.log('### delete all exercises ###'.toLocaleUpperCase());
 
-    let exercisesQuery = Exercise.find(filter)
-                                 .sort({ date: 1 }) // Sort by date ascending for predictable limit
-                                 .select('description duration date'); // Explicitly select required fields
+	Exercise.deleteMany({}, function (err, result) {
+		if (err) {
+			console.error(err);
+			res.json({
+				message: 'Deleting all exercises failed!',
+			});
+		}
 
-    if (limit) {
-        const parsedLimit = parseInt(limit);
-        if (!isNaN(parsedLimit) && parsedLimit > 0) {
-            exercisesQuery = exercisesQuery.limit(parsedLimit);
-        }
-        // If limit is invalid, we proceed without limiting,
-        // which is often acceptable for FCC if it doesn't break other tests.
-    }
+		res.json({ message: 'All exercises have been deleted!', result: result });
+	});
+});
 
-    try {
-        const exercises = await exercisesQuery.exec();
+app.get('/', async (_req, res) => {
+	res.sendFile(__dirname + '/views/index.html');
+	await User.syncIndexes();
+	await Exercise.syncIndexes();
+});
 
-        const log = exercises.map(e => ({
-            description: e.description,
-            duration: e.duration,
-            date: e.date.toDateString()
-        }));
+/*
+ * GET
+ * Get all users
+ */
+app.get('/api/users', function (_req, res) {
+	console.log('### get all users ###'.toLocaleUpperCase());
 
-        res.json({
-            username: user.username,
-            count: log.length, // Use log.length, not exercises.length (they should be same, but safer)
-            _id: user._id,
-            log
-        });
-    } catch (err) {
-        console.error(err); // Log the actual error for debugging
-        res.status(500).json({ error: "Error fetching exercise log" });
-    }
+	User.find({}, function (err, users) {
+		if (err) {
+			console.error(err);
+			res.json({
+				message: 'Getting all users failed!',
+			});
+		}
+
+		if (users.length === 0) {
+			res.json({ message: 'There are no users in the database!' });
+		}
+
+		console.log('users in database: '.toLocaleUpperCase() + users.length);
+
+		res.json(users);
+	});
+});
+
+/*
+ * POST
+ * Create a new user
+ */
+app.post('/api/users', function (req, res) {
+	const inputUsername = req.body.username;
+
+	console.log('### create a new user ###'.toLocaleUpperCase());
+
+	//? Create a new user
+	let newUser = new User({ username: inputUsername });
+
+	console.log(
+		'creating a new user with username - '.toLocaleUpperCase() + inputUsername
+	);
+
+	newUser.save((err, user) => {
+		if (err) {
+			console.error(err);
+			res.json({ message: 'User creation failed!' });
+		}
+
+		res.json({ username: user.username, _id: user._id });
+	});
+});
+
+/*
+ * POST
+ * Add a new exercise
+ * @param _id
+ */
+app.post('/api/users/:_id/exercises', function (req, res) {
+	var userId = req.params._id;
+	var description = req.body.description;
+	var duration = req.body.duration;
+	var date = req.body.date;
+
+	console.log('### add a new exercise ###'.toLocaleUpperCase());
+
+	//? Check for date
+	if (!date) {
+		date = new Date().toISOString().substring(0, 10);
+	}
+
+	console.log(
+		'looking for user with id ['.toLocaleUpperCase() + userId + '] ...'
+	);
+
+	//? Find the user
+	User.findById(userId, (err, userInDb) => {
+		if (err) {
+			console.error(err);
+			res.json({ message: 'There are no users with that ID in the database!' });
+		}
+
+		//* Create new exercise
+		let newExercise = new Exercise({
+			userId: userInDb._id,
+			username: userInDb.username,
+			description: description,
+			duration: parseInt(duration),
+			date: date,
+		});
+
+		newExercise.save((err, exercise) => {
+			if (err) {
+				console.error(err);
+				res.json({ message: 'Exercise creation failed!' });
+			}
+
+			res.json({
+				username: userInDb.username,
+				description: exercise.description,
+				duration: exercise.duration,
+				date: new Date(exercise.date).toDateString(),
+				_id: userInDb._id,
+			});
+		});
+	});
+});
+
+/*
+ * GET
+ * Get a user's exercise log
+ * @param _id
+ */
+app.get('/api/users/:_id/logs', async function (req, res) {
+	const userId = req.params._id;
+	const from = req.query.from || new Date(0).toISOString().substring(0, 10);
+	const to =
+		req.query.to || new Date(Date.now()).toISOString().substring(0, 10);
+	const limit = Number(req.query.limit) || 0;
+
+	console.log('### get the log from a user ###'.toLocaleUpperCase());
+
+	//? Find the user
+	let user = await User.findById(userId).exec();
+
+	console.log(
+		'looking for exercises with id ['.toLocaleUpperCase() + userId + '] ...'
+	);
+
+	//? Find the exercises
+	let exercises = await Exercise.find({
+		userId: userId,
+		date: { $gte: from, $lte: to },
+	})
+		.select('description duration date')
+		.limit(limit)
+		.exec();
+
+	let parsedDatesLog = exercises.map((exercise) => {
+		return {
+			description: exercise.description,
+			duration: exercise.duration,
+			date: new Date(exercise.date).toDateString(),
+		};
+	});
+
+	res.json({
+		_id: user._id,
+		username: user.username,
+		count: parsedDatesLog.length,
+		log: parsedDatesLog,
+	});
 });
 
 const listener = app.listen(process.env.PORT || 3000, () => {
-    console.log('Your app is listening on port ' + listener.address().port)
-})
+	console.log('Your app is listening on port ' + listener.address().port);
+});
