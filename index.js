@@ -6,7 +6,10 @@ const mongoose = require('mongoose');
 
 //* MongoDB
 
-const MONGO_URI = process.env.MONGO_URI ;
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+  throw new Error("MONGO_URI environment variable is not set.");
+}
 mongoose.connect(MONGO_URI);
 
 require('dotenv').config();
