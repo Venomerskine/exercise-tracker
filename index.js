@@ -4,7 +4,10 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 
+//* MongoDB
+
 const MONGO_URI = process.env.MONGO_URI ;
+mongoose.connect(MONGO_URI);
 
 require('dotenv').config();
 
@@ -15,9 +18,7 @@ app.use(express.static('public'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 
-//* MongoDB
 
-mongoose.connect(MONGO_URI);
 
 
 //* Schemas
