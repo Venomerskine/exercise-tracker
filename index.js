@@ -4,6 +4,8 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
 
+const MONGO_URI = process.env.MONGO_URI ;
+
 require('dotenv').config();
 
 //* Middleware
