@@ -85,44 +85,70 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
 
 
 app.get("/api/users/:_id/logs", async (req, res) => {
-    const {from, to, limit} = req.query
-    const id = req.params._id
-    const user =  await User.findById(id)
-    if (!user){
-        res.send("Could not find user")
-        return 
-    }
-    let dateObj = {}
-    if(from){
-        dateObj["$gte"] = new Date(from)
-    }
-    if (to){
-        dateObj["$lte"] = new Date(to)
-    }
-    let filter = {
-        user_id: id
-    }
-    if(from || to){
-        filter.date = dateObj
+    const { from, to, limit } = req.query;
+    const id = req.params._id;
+
+    const user = await User.findById(id);
+    if (!user) {
+        return res.json({ error: "Could not find user" }); // Consistent error response
     }
 
-    const queryLimit = limit ? parseInt(limit) : 500
-    const exercises = await Exercise.find(filter).limit(queryLimit)
+    let filter = { user_id: id };
+    let dateObj = {};
 
-    
-    const log = exercises.map(e => ({
-        description: e.description,
-        duration: e.duration,
-        date: e.date.toDateString()
-    }))
-    
-    res.json({
-        _id: user._id,
-        username: user.username,
-        count: exercises.length,
-        log
-    })
-})
+    if (from) {
+        const fromDate = new Date(from);
+        if (isNaN(fromDate.getTime())) {
+            return res.json({ error: "Invalid 'from' date format" });
+        }
+        dateObj["$gte"] = fromDate;
+    }
+
+    if (to) {
+        const toDate = new Date(to);
+        if (isNaN(toDate.getTime())) {
+            return res.json({ error: "Invalid 'to' date format" });
+        }
+        // Crucial for 'to' filter to include the entire day
+        toDate.setDate(toDate.getDate() + 1); // Add one day
+        dateObj["$lt"] = toDate; // Use $lt (less than)
+    }
+
+    if (Object.keys(dateObj).length > 0) {
+        filter.date = dateObj;
+    }
+
+    let exercisesQuery = Exercise.find(filter)
+                                 .sort({ date: 1 }) // Crucial: Sort by date ascending
+                                 .select('description duration date'); // Good practice to select specific fields
+
+    if (limit) {
+        const parsedLimit = parseInt(limit);
+        if (!isNaN(parsedLimit) && parsedLimit > 0) { // Ensure it's a positive number
+            exercisesQuery = exercisesQuery.limit(parsedLimit);
+        }
+    }
+
+    try {
+        const exercises = await exercisesQuery.exec(); // Execute the Mongoose query
+
+        const log = exercises.map(e => ({
+            description: e.description,
+            duration: e.duration,
+            date: e.date.toDateString()
+        }));
+
+        res.json({
+            _id: user._id,
+            username: user.username,
+            count: log.length, // Use log.length
+            log
+        });
+    } catch (err) {
+        console.error("Error fetching exercise log:", err); // More informative error logging
+        res.status(500).json({ error: "Error fetching exercise log" });
+    }
+});
 
 const listener = app.listen(process.env.PORT || 3000, () => {
     console.log('Your app is listening on port ' + listener.address().port)
